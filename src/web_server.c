@@ -188,6 +188,40 @@ static const char *s_html =
     "<p style=\"font-size:11px;color:#6b7280;margin:6px 0 0;text-align:center\">"
     "TX Power and Roaming RSSI Trigger apply instantly; Name, SSID, and Password changes reboot the device.</p>"
     "</form>"
+    "</form>"
+    "<form method=\"POST\" action=\"/wireguard/save\" style=\"margin-top:16px\">"
+    "<div class=\"card\"><h2>WireGuard</h2>"
+    "<label class=\"tip\" data-tip=\"Tunnel this device's RTSP stream to a remote BirdNET-Go server over WireGuard, alongside the normal WiFi connection. Everything else keeps using WiFi as usual; only traffic to the tunnel subnet below is routed through the VPN.\">Status</label>"
+    "<select name=\"wg_enabled\">"
+    "<option value=\"1\"%s>Enabled</option>"
+    "<option value=\"0\"%s>Disabled</option>"
+    "</select>"
+    "<label class=\"tip\" data-tip=\"This device's WireGuard private key, generated with wg genkey. Kept secret \u2014 never shared with the peer.\">Private Key</label>"
+    "<input name=\"wg_private_key\" type=\"password\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\">"
+    "<label class=\"tip\" data-tip=\"The remote peer's (BirdNET-Go server's) WireGuard public key.\">Peer Public Key</label>"
+    "<input name=\"wg_peer_public_key\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\">"
+    "<div class=\"row\">"
+    "<div><label>Peer Endpoint</label>"
+    "<input name=\"wg_peer_endpoint\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"vpn.example.com\"></div>"
+    "<div><label>Peer Port</label>"
+    "<input name=\"wg_peer_port\" type=\"number\" min=\"1\" max=\"65535\" value=\"%d\"></div>"
+    "</div>"
+    "<div class=\"row\">"
+    "<div><label class=\"tip\" data-tip=\"This device's own address inside the tunnel, e.g. 10.10.0.2.\">Tunnel Address</label>"
+    "<input name=\"wg_local_addr\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"10.10.0.2\"></div>"
+    "<div><label class=\"tip\" data-tip=\"Subnet size reachable through the tunnel, as a CIDR prefix. /24 covers 10.10.0.0-10.10.0.255.\">Prefix</label>"
+    "<input name=\"wg_local_prefix\" type=\"number\" min=\"1\" max=\"32\" value=\"%d\"></div>"
+    "</div>"
+    "<label class=\"tip\" data-tip=\"How often to send a keepalive packet, in seconds. Needed if this device is behind NAT (almost always true on WiFi). 0 disables it.\">Keepalive (seconds)</label>"
+    "<input name=\"wg_keepalive_sec\" type=\"number\" min=\"0\" max=\"65535\" value=\"%d\">"
+    "</div>"
+    "<input type=\"hidden\" name=\"tab\" value=\"device\">"
+    "<button type=\"submit\">Save</button>"
+    "<p style=\"font-size:11px;color:#6b7280;margin:6px 0 0;text-align:center\">"
+    "WireGuard changes reboot the device.</p>"
+    "</form>"
+    "</div>"
+    "<div class=\"tab-panel\" id=\"tab-audio\">"
     "</div>"
     "<div class=\"tab-panel\" id=\"tab-audio\">"
     "<form method=\"POST\" action=\"/save\">"
@@ -976,6 +1010,11 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     html_escape(g_config.wifi_ssid,     ssid_esc, sizeof(ssid_esc));
     html_escape(g_config.wifi_password, pass_esc, sizeof(pass_esc));
     html_escape(g_config.ntp_server,    ntp_esc,  sizeof(ntp_esc));
+    char wg_privkey_esc[300], wg_pubkey_esc[300], wg_endpoint_esc[400], wg_addr_esc[128];
+    html_escape(g_config.wg_private_key,     wg_privkey_esc,  sizeof(wg_privkey_esc));
+    html_escape(g_config.wg_peer_public_key, wg_pubkey_esc,   sizeof(wg_pubkey_esc));
+    html_escape(g_config.wg_peer_endpoint,   wg_endpoint_esc, sizeof(wg_endpoint_esc));
+    html_escape(g_config.wg_local_addr,      wg_addr_esc,     sizeof(wg_addr_esc));
 
     char device_time[32];
     time_sync_format_local(device_time, sizeof(device_time));
@@ -995,6 +1034,15 @@ static esp_err_t root_get_handler(httpd_req_t *req)
         pass_esc,
         (int)g_config.wifi_tx_power_dbm, (int)g_config.wifi_tx_power_dbm,
         (int)g_config.roaming_rssi_threshold_dbm,
+        g_config.wg_enabled ? " selected" : "",
+        !g_config.wg_enabled ? " selected" : "",
+        wg_privkey_esc,
+        wg_pubkey_esc,
+        wg_endpoint_esc,
+        (int)g_config.wg_peer_port,
+        wg_addr_esc,
+        (int)g_config.wg_local_prefix,
+        (int)g_config.wg_keepalive_sec,
         g_config.audio_source == AUDIO_SOURCE_I2S ? " selected" : "",
         g_config.audio_source == AUDIO_SOURCE_USB ? " selected" : "",
         g_config.mic_model == MIC_MODEL_INMP441 ? " selected" : "",

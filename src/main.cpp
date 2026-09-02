@@ -14,6 +14,7 @@
 #include "time_sync.h"
 #include "log_stream.h"
 #include "log_persist.h"
+//#include "wireguard_manager.h"
 
 #include "esp_log.h"
 #include "esp_ota_ops.h"
@@ -86,6 +87,12 @@ extern "C" void app_main(void)
         // this lands — needed for real timestamps in the log viewer and for
         // auto_reboot_start() above to mean anything.
         ESP_ERROR_CHECK(time_sync_start());
+
+        // Bring up the WireGuard tunnel (no-op if disabled in config) — after
+        // time sync since the handshake relies on a timestamp, before RTSP
+        // so the split-tunnel route exists by the time anything tries to
+        // reach a client over it.
+        //ESP_ERROR_CHECK(wireguard_manager_start());
 
         // Start I2S capture and ring buffer
         ESP_ERROR_CHECK(audio_pipeline_start());

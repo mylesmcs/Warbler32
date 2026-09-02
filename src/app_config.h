@@ -36,7 +36,15 @@ typedef struct {
     char     ntp_server[64];        // NTP server hostname (see time_sync.h)
     int16_t  utc_offset_min;        // fixed UTC offset in minutes, no DST (e.g. -300 = EST, 330 = IST)
     int8_t   roaming_rssi_threshold_dbm; // roam once the current AP's RSSI drops below this (see wifi_manager_apply_roaming_rssi())
-} app_config_t;
+    uint8_t  wg_enabled;               // 0/1
+    char     wg_private_key[45];       // this device's key, base64 (44 chars + null)
+    char     wg_peer_public_key[45];   // BirdNET-Go server's public key, base64
+    char     wg_peer_endpoint[64];     // hostname or IP of the peer, no port
+    uint16_t wg_peer_port;             // peer's WireGuard listen port (usually 51820)
+    char     wg_local_addr[16];        // this device's tunnel IP, e.g. "10.10.0.2"
+    uint8_t  wg_local_prefix;          // CIDR prefix, e.g. 24
+    uint16_t wg_keepalive_sec;         // 0 = disabled
+  } app_config_t;
 
 extern app_config_t g_config;
 

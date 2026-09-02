@@ -359,3 +359,12 @@
 #define TASK_BATT_HISTORY_STACK     3072
 #define TASK_BATT_HISTORY_PRIORITY  2
 #define TASK_BATT_HISTORY_CORE      1
+
+// =============================================================================
+// WireGuard settings
+// =============================================================================
+#define WG_DEFAULT_ENABLED        0
+#define WG_PEER_PORT_DEFAULT      51820
+#define WG_LOCAL_PREFIX_DEFAULT   24
+#define WG_ALLOWED_PREFIX_DEFAULT 24
+#define WG_KEEPALIVE_SEC_DEFAULT  25
