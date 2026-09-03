@@ -1,4 +1,22 @@
 dependencies:
+  esphome/libsodium:
+    component_hash: fdfb2667c27c2c633e1d4a165e8c8f0b3776fd43acf4d3e1e65c1f1be7bfd682
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.10021.4
+  esphome/wireguard:
+    component_hash: dc76a4b613ca3ceb0eddeb5b011d5a8bcdde021c07f58259b0133417e5002a9c
+    dependencies:
+    - name: esphome/libsodium
+      registry_url: https://components.espressif.com
+      require: private
+      version: ^1.10021.1
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.4.6
   espressif/cjson:
     component_hash: e788323270d90738662d66fffa910bfe1fba019bba087f01557e70c40485b469
     source:
@@ -27,7 +45,19 @@ dependencies:
     component_hash: null
     source:
       type: idf
+<<<<<<< HEAD
     version: 5.4.0
 manifest_hash: 4ebf44eb517b597e872e93544bda7e5655fcc6616b80e7c67abaceacc44aa669
 target: esp32s3
 version: 1.0.0
+=======
+    version: 6.0.1
+direct_dependencies:
+- esphome/wireguard
+- espressif/cjson
+- espressif/mdns
+- espressif/usb_host_uac
+manifest_hash: 397034ac4f76040e06f1e1cbcbeee9df7986cdf150f43bfad48cbace4cfacd30
+target: esp32s3
+version: 2.0.0
+>>>>>>> e2400dc (updates)

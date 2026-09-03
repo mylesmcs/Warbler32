@@ -1398,6 +1398,96 @@ static esp_err_t save_post_handler(httpd_req_t *req)
 }
 
 // ---------------------------------------------------------------------------
+// POST /wireguard/save
+// ---------------------------------------------------------------------------
+static esp_err_t wireguard_save_post_handler(httpd_req_t *req)
+{
+    set_send_timeout(req, 2);
+
+    int body_len = req->content_len;
+    if (body_len <= 0 || body_len > 1023) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Bad request size");
+        return ESP_FAIL;
+    }
+    char *body = malloc(body_len + 1);
+    if (!body) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
+        return ESP_FAIL;
+    }
+    int received = httpd_req_recv(req, body, body_len);
+    if (received <= 0) {
+        free(body);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Read failed");
+        return ESP_FAIL;
+    }
+    body[received] = '\0';
+
+    char val[64];
+
+    has_field(body, "wg_enabled");  // (unused result; select always sends a value)
+    get_field(body, "wg_enabled", val, sizeof(val));
+    g_config.wg_enabled = (atoi(val) != 0) ? 1 : 0;
+
+    // Password-style field: blank means "leave the stored key alone", same
+    // convention as wifi_password — the input is masked, so an accidental
+    // clear (or a browser quirk on a type="password" field) shouldn't wipe
+    // a working key.
+    get_field(body, "wg_private_key", val, sizeof(val));
+    if (val[0]) {
+        strlcpy(g_config.wg_private_key, val, sizeof(g_config.wg_private_key));
+    }
+
+    get_field(body, "wg_peer_public_key", val, sizeof(val));
+    strlcpy(g_config.wg_peer_public_key, val, sizeof(g_config.wg_peer_public_key));
+
+    get_field(body, "wg_peer_endpoint", val, sizeof(val));
+    strlcpy(g_config.wg_peer_endpoint, val, sizeof(g_config.wg_peer_endpoint));
+
+    get_field(body, "wg_peer_port", val, sizeof(val));
+    int port = atoi(val);
+    if (port < 1) port = 1;
+    if (port > 65535) port = 65535;
+    g_config.wg_peer_port = (uint16_t)port;
+
+    get_field(body, "wg_local_addr", val, sizeof(val));
+    strlcpy(g_config.wg_local_addr, val, sizeof(g_config.wg_local_addr));
+
+    get_field(body, "wg_local_prefix", val, sizeof(val));
+    int prefix = atoi(val);
+    if (prefix < 1) prefix = 1;
+    if (prefix > 32) prefix = 32;
+    g_config.wg_local_prefix = (uint8_t)prefix;
+
+    get_field(body, "wg_keepalive_sec", val, sizeof(val));
+    int keepalive = atoi(val);
+    if (keepalive < 0) keepalive = 0;
+    if (keepalive > 65535) keepalive = 65535;
+    g_config.wg_keepalive_sec = (uint16_t)keepalive;
+
+    free(body);
+    app_config_save();
+
+    ESP_LOGI(TAG, "WireGuard config saved, rebooting");
+
+    static const char resp[] =
+        "<!DOCTYPE html><html><head>"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        "<title>Warbler32</title></head>"
+        "<body style=\"font-family:system-ui;background:#111827;color:#e5e7eb;"
+        "text-align:center;padding:60px 16px\">"
+        "<h2 style=\"color:#34d399\">Saved!</h2>"
+        "<p>Device is rebooting&hellip;</p>"
+        "<p style=\"color:#6b7280;font-size:13px\">Page will reload in 8 seconds.</p>"
+        "<script>setTimeout(()=>{location.href='/#device'},8000)</script>"
+        "</body></html>";
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, resp, strlen(resp));
+
+    xTaskCreate(reboot_task, "reboot", 1024, NULL, 5, NULL);
+    return ESP_OK;
+}
+
+// ---------------------------------------------------------------------------
 // POST /reboot — plain reboot, settings untouched
 // ---------------------------------------------------------------------------
 static esp_err_t reboot_post_handler(httpd_req_t *req)
@@ -2080,6 +2170,9 @@ esp_err_t web_server_start(void)
     static const httpd_uri_t post_save = {
         .uri = "/save", .method = HTTP_POST, .handler = save_post_handler,
     };
+    static const httpd_uri_t post_wg_save = {
+        .uri = "/wireguard/save", .method = HTTP_POST, .handler = wireguard_save_post_handler,
+    };
     static const httpd_uri_t post_reboot = {
         .uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler,
     };
@@ -2133,6 +2226,7 @@ esp_err_t web_server_start(void)
     };
     httpd_register_uri_handler(server, &get_root);
     httpd_register_uri_handler(server, &post_save);
+    httpd_register_uri_handler(server, &post_wg_save);
     httpd_register_uri_handler(server, &post_reboot);
     httpd_register_uri_handler(server, &post_reset);
     httpd_register_uri_handler(server, &post_ota);
