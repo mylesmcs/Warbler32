@@ -102,3 +102,5 @@ CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE=1024
 # full 6-option range this project's web UI offers (web_server.c), plus
 # headroom for other mics.
 CONFIG_UAC_FREQ_NUM_MAX=8
+
+CONFIG_LWIP_PPP_SUPPORT=y
