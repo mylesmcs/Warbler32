@@ -12,6 +12,7 @@
 #include "log_stream.h"
 #include "log_persist.h"
 #include "time_sync.h"
+#include "wireguard_manager.h"
 #include "config.h"
 
 #include "esp_wifi.h"
@@ -136,6 +137,7 @@ static const char *s_html =
     "<span>Streaming <b id=\"stStrM\">&ndash;</b></span>"
     "<span>Mic <b id=\"stMicM\">&ndash;</b></span>"
     "<span>Watchdog <b id=\"stWdM\">&ndash;</b></span>"
+    "<span>WireGuard <b id=\"stWgM\">&ndash;</b></span>"
     "<span>Battery <b id=\"stBattM\" onclick=\"goToBattHistory()\" style=\"cursor:pointer\">&ndash;</b></span>"
     "</div>"
     "<div class=\"tab-panel\" id=\"tab-dashboard\">"
@@ -150,6 +152,7 @@ static const char *s_html =
     "<div><label class=\"tip\" data-tip=\"Samples the I2S driver overwrote at the DMA level before the reader task could pull them out - a lower-level drop than Audio Drops above, which only counts packets lost once they reach the streaming ring buffer. Always 0 on the USB mic.\">DMA Overflows</label><span class=\"val\" id=\"stDma\">&ndash;</span></div>"
     "<div><label class=\"tip\" data-tip=\"Watches the raw mic signal for a flatline (dead mic, broken wire). SILENT means no signal movement for 20+ seconds - the status LED also blinks magenta. A healthy mic's self-noise never trips this, even in a quiet room.\">Mic Health</label><span class=\"val\" id=\"stMic\">&ndash;</span></div>"
     "<div><label class=\"tip\" data-tip=\"Watches whether the audio reader task is producing data at all. STALLED counts up toward an automatic reboot; OFF means the Diagnostics setting below has this disabled.\">Watchdog</label><span class=\"val\" id=\"stWd\">&ndash;</span></div>"
+    "<div><label class=\"tip\" data-tip=\"Tunnel to a remote server over WireGuard, alongside normal WiFi. OFF means disabled in Device & Network. DOWN means enabled but not currently connected to the peer.\">WireGuard</label><span class=\"val\" id=\"stWg\">&ndash;</span></div>"
     "<div><label class=\"tip\" data-tip=\"Battery level. Shows percentage and charge state from the optional MPPT solar charge controller if one is detected, otherwise live voltage from the optional INA219 battery monitor. Shows an em dash if neither is wired up. See the icon next to the page title for an at-a-glance level.\">Battery</label><span class=\"val\" id=\"stBatt\" onclick=\"goToBattHistory()\" style=\"cursor:pointer\">&ndash;</span></div>"
     "</div></div>"
     "<div class=\"card\"><h2>Info</h2>"
@@ -489,6 +492,10 @@ static const char *s_html =
     "if(!j.wd_enabled){sw.textContent=swM.textContent='OFF';sw.style.color=swM.style.color='';}"
     "else if(!j.wd_stall){sw.textContent=swM.textContent='OK';sw.style.color=swM.style.color='';}"
     "else{sw.textContent=swM.textContent='STALLED '+stFmt(j.wd_stall);sw.style.color=swM.style.color='#f87171';}"
+    "var sg=document.getElementById('stWg'),sgM=document.getElementById('stWgM');"
+    "if(!j.wg_enabled){sg.textContent=sgM.textContent='OFF';sg.style.color=sgM.style.color='';}"
+    "else if(j.wg_up){sg.textContent=sgM.textContent='UP'+(j.wg_handshake_secs>=0?' '+stFmt(j.wg_handshake_secs)+' ago':'');sg.style.color=sgM.style.color='';}"
+    "else{sg.textContent=sgM.textContent='DOWN';sg.style.color=sgM.style.color='#f87171';}"
     "var sb=document.getElementById('stBatt'),sbM=document.getElementById('stBattM');"
     "var bi=document.getElementById('battIcon');"
     "if(j.mppt_present){"
@@ -2015,7 +2022,7 @@ static esp_err_t status_get_handler(httpd_req_t *req)
     float cpu_temp_c = 0;
     bool  cpu_temp_ok = (cpu_temp_read_celsius(&cpu_temp_c) == ESP_OK);
 
-    char json[660];
+    char json[720];
     int len = snprintf(json, sizeof(json),
         "{\"uptime\":%lld,\"heap\":%u,\"heap_min\":%u,\"psram\":%u,"
         "\"rssi\":%d,\"clients\":%d,\"max_clients\":%d,\"streaming\":%d,"
@@ -2025,6 +2032,7 @@ static esp_err_t status_get_handler(httpd_req_t *req)
         "\"batt_present\":%d,\"batt_mv\":%u,\"batt_pct\":%d,\"batt_low\":%d,"
         "\"mppt_present\":%d,\"mppt_pct\":%d,\"mppt_charging\":%d,"
         "\"ap_mode\":%d,\"ap_fallback\":%d,"
+        "\"wg_enabled\":%d,\"wg_up\":%d,\"wg_handshake_secs\":%d,"
         "\"cpu_temp_ok\":%d,\"cpu_temp_c\":%.1f,"
         "\"version\":\"%s\",\"variant\":\"%s\"}",
         esp_timer_get_time() / 1000000,
@@ -2044,6 +2052,9 @@ static esp_err_t status_get_handler(httpd_req_t *req)
         batt_present ? 1 : 0, (unsigned)batt_mv, batt_pct, batt_low ? 1 : 0,
         mppt_present ? 1 : 0, mppt_pct, mppt_charging ? 1 : 0,
         wifi_manager_is_ap_mode() ? 1 : 0, wifi_manager_is_fallback_mode() ? 1 : 0,
+        g_config.wg_enabled ? 1 : 0,
+        wireguard_manager_is_up() ? 1 : 0,
+        wireguard_manager_seconds_since_handshake(),
         cpu_temp_ok ? 1 : 0, cpu_temp_c,
         esp_app_get_description()->version, ota_board_variant());
 
