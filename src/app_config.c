@@ -40,14 +40,15 @@ esp_err_t app_config_load(void)
     strlcpy(g_config.ntp_server, NTP_SERVER_DEFAULT, sizeof(g_config.ntp_server));
     g_config.utc_offset_min = UTC_OFFSET_MIN_DEFAULT;
     g_config.roaming_rssi_threshold_dbm = ROAMING_RSSI_THRESHOLD_DBM_DEFAULT;
-    g_config.wg_enabled       = WG_DEFAULT_ENABLED;
+    g_config.wg_enabled            = WG_DEFAULT_ENABLED;
     g_config.wg_private_key[0]     = '\0';
     g_config.wg_peer_public_key[0] = '\0';
     g_config.wg_peer_endpoint[0]   = '\0';
-    g_config.wg_peer_port     = WG_PEER_PORT_DEFAULT;
-    g_config.wg_local_addr[0] = '\0';
-    g_config.wg_local_prefix  = WG_LOCAL_PREFIX_DEFAULT;
-    g_config.wg_keepalive_sec  = WG_KEEPALIVE_SEC_DEFAULT;
+    g_config.wg_peer_port          = WG_PEER_PORT_DEFAULT;
+    g_config.wg_local_addr[0]      = '\0';
+    g_config.wg_local_prefix       = WG_LOCAL_PREFIX_DEFAULT;
+    g_config.wg_allowed_subnets[0] = '\0';
+    g_config.wg_keepalive_sec      = WG_KEEPALIVE_SEC_DEFAULT;
 
     nvs_handle_t h;
     esp_err_t ret = nvs_open(NVS_NS, NVS_READONLY, &h);
@@ -101,6 +102,8 @@ esp_err_t app_config_load(void)
     len = sizeof(g_config.wg_local_addr);
     nvs_get_str(h, "wg_laddr",    g_config.wg_local_addr,      &len);
     nvs_get_u8 (h, "wg_lpfx",     &g_config.wg_local_prefix);
+    len = sizeof(g_config.wg_allowed_subnets);
+    nvs_get_str(h, "wg_asub",     g_config.wg_allowed_subnets, &len);
     nvs_get_u16(h, "wg_keepalive",&g_config.wg_keepalive_sec);
 
     nvs_close(h);
@@ -151,6 +154,7 @@ esp_err_t app_config_save(void)
     nvs_set_u16(h, "wg_port",     g_config.wg_peer_port);
     nvs_set_str(h, "wg_laddr",    g_config.wg_local_addr);
     nvs_set_u8 (h, "wg_lpfx",     g_config.wg_local_prefix);
+    nvs_set_str(h, "wg_asub",     g_config.wg_allowed_subnets);
     nvs_set_u16(h, "wg_keepalive",g_config.wg_keepalive_sec);
     nvs_commit(h);
     nvs_close(h);

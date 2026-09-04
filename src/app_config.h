@@ -43,6 +43,7 @@ typedef struct {
     uint16_t wg_peer_port;             // peer's WireGuard listen port (usually 51820)
     char     wg_local_addr[16];        // this device's tunnel IP, e.g. "10.10.0.2"
     uint8_t  wg_local_prefix;          // CIDR prefix, e.g. 24
+    char     wg_allowed_subnets[128];  // comma-separated CIDR list, e.g. "172.16.0.0/24,192.168.1.0/24"
     uint16_t wg_keepalive_sec;         // 0 = disabled
   } app_config_t;
 

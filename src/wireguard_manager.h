@@ -11,6 +11,8 @@ extern "C" {
 // if g_config.wg_enabled is 0. Call after wifi_manager_start() and
 // time_sync_start() — WireGuard's handshake relies on a timestamp, and a
 // working network is obviously required before a tunnel over it can exist.
+// Never returns a fatal error for a bad/unreachable config — logs and
+// leaves the tunnel down instead, so a typo'd key can't boot-loop the device.
 esp_err_t wireguard_manager_start(void);
 
 // True once the handshake with the peer has actually completed — not just

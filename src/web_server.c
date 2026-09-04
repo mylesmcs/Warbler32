@@ -192,16 +192,17 @@ static const char *s_html =
     "TX Power and Roaming RSSI Trigger apply instantly; Name, SSID, and Password changes reboot the device.</p>"
     "</form>"
     "</form>"
+    "</form>"
     "<form method=\"POST\" action=\"/wireguard/save\" style=\"margin-top:16px\">"
     "<div class=\"card\"><h2>WireGuard</h2>"
-    "<label class=\"tip\" data-tip=\"Tunnel this device's RTSP stream to a remote BirdNET-Go server over WireGuard, alongside the normal WiFi connection. Everything else keeps using WiFi as usual; only traffic to the tunnel subnet below is routed through the VPN.\">Status</label>"
+    "<label class=\"tip\" data-tip=\"Tunnel this device's RTSP stream to a remote server over WireGuard, alongside the normal WiFi connection. Everything else keeps using WiFi as usual; only traffic to the allowed subnets below is routed through the VPN.\">Status</label>"
     "<select name=\"wg_enabled\">"
     "<option value=\"1\"%s>Enabled</option>"
     "<option value=\"0\"%s>Disabled</option>"
     "</select>"
-    "<label class=\"tip\" data-tip=\"This device's WireGuard private key, generated with wg genkey. Kept secret \u2014 never shared with the peer.\">Private Key</label>"
+    "<label class=\"tip\" data-tip=\"This device's WireGuard private key, generated with wg genkey. Kept secret — never shared with the peer.\">Private Key</label>"
     "<input name=\"wg_private_key\" type=\"password\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\">"
-    "<label class=\"tip\" data-tip=\"The remote peer's (BirdNET-Go server's) WireGuard public key.\">Peer Public Key</label>"
+    "<label class=\"tip\" data-tip=\"The remote peer's WireGuard public key.\">Peer Public Key</label>"
     "<input name=\"wg_peer_public_key\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\">"
     "<div class=\"row\">"
     "<div><label>Peer Endpoint</label>"
@@ -210,11 +211,13 @@ static const char *s_html =
     "<input name=\"wg_peer_port\" type=\"number\" min=\"1\" max=\"65535\" value=\"%d\"></div>"
     "</div>"
     "<div class=\"row\">"
-    "<div><label class=\"tip\" data-tip=\"This device's own address inside the tunnel, e.g. 10.10.0.2.\">Tunnel Address</label>"
-    "<input name=\"wg_local_addr\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"10.10.0.2\"></div>"
-    "<div><label class=\"tip\" data-tip=\"Subnet size reachable through the tunnel, as a CIDR prefix. /24 covers 10.10.0.0-10.10.0.255.\">Prefix</label>"
+    "<div><label class=\"tip\" data-tip=\"This device's own address inside the tunnel, e.g. 172.16.0.7.\">Tunnel Address</label>"
+    "<input name=\"wg_local_addr\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"172.16.0.7\"></div>"
+    "<div><label class=\"tip\" data-tip=\"CIDR prefix for this device's own tunnel address.\">Prefix</label>"
     "<input name=\"wg_local_prefix\" type=\"number\" min=\"1\" max=\"32\" value=\"%d\"></div>"
     "</div>"
+    "<label class=\"tip\" data-tip=\"Comma-separated subnets reachable through the tunnel, in CIDR form, e.g. 172.16.0.0/24,192.168.1.0/24. This is what actually gets routed to the peer.\">Allowed Subnets</label>"
+    "<input name=\"wg_allowed_subnets\" value=\"%s\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"172.16.0.0/24,192.168.1.0/24\">"
     "<label class=\"tip\" data-tip=\"How often to send a keepalive packet, in seconds. Needed if this device is behind NAT (almost always true on WiFi). 0 disables it.\">Keepalive (seconds)</label>"
     "<input name=\"wg_keepalive_sec\" type=\"number\" min=\"0\" max=\"65535\" value=\"%d\">"
     "</div>"
@@ -1017,11 +1020,13 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     html_escape(g_config.wifi_ssid,     ssid_esc, sizeof(ssid_esc));
     html_escape(g_config.wifi_password, pass_esc, sizeof(pass_esc));
     html_escape(g_config.ntp_server,    ntp_esc,  sizeof(ntp_esc));
-    char wg_privkey_esc[300], wg_pubkey_esc[300], wg_endpoint_esc[400], wg_addr_esc[128];
+    char wg_privkey_esc[300], wg_pubkey_esc[300], wg_endpoint_esc[400],
+         wg_addr_esc[128], wg_allowed_esc[400];
     html_escape(g_config.wg_private_key,     wg_privkey_esc,  sizeof(wg_privkey_esc));
     html_escape(g_config.wg_peer_public_key, wg_pubkey_esc,   sizeof(wg_pubkey_esc));
     html_escape(g_config.wg_peer_endpoint,   wg_endpoint_esc, sizeof(wg_endpoint_esc));
     html_escape(g_config.wg_local_addr,      wg_addr_esc,     sizeof(wg_addr_esc));
+    html_escape(g_config.wg_allowed_subnets, wg_allowed_esc,  sizeof(wg_allowed_esc));
 
     char device_time[32];
     time_sync_format_local(device_time, sizeof(device_time));
@@ -1049,6 +1054,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
         (int)g_config.wg_peer_port,
         wg_addr_esc,
         (int)g_config.wg_local_prefix,
+        wg_allowed_esc,
         (int)g_config.wg_keepalive_sec,
         g_config.audio_source == AUDIO_SOURCE_I2S ? " selected" : "",
         g_config.audio_source == AUDIO_SOURCE_USB ? " selected" : "",
@@ -1429,16 +1435,13 @@ static esp_err_t wireguard_save_post_handler(httpd_req_t *req)
     }
     body[received] = '\0';
 
-    char val[64];
+    char val[128];
 
-    has_field(body, "wg_enabled");  // (unused result; select always sends a value)
     get_field(body, "wg_enabled", val, sizeof(val));
     g_config.wg_enabled = (atoi(val) != 0) ? 1 : 0;
 
-    // Password-style field: blank means "leave the stored key alone", same
-    // convention as wifi_password — the input is masked, so an accidental
-    // clear (or a browser quirk on a type="password" field) shouldn't wipe
-    // a working key.
+    // Password-style field: blank means "leave the stored key alone" — the
+    // input is masked, so an accidental clear shouldn't wipe a working key.
     get_field(body, "wg_private_key", val, sizeof(val));
     if (val[0]) {
         strlcpy(g_config.wg_private_key, val, sizeof(g_config.wg_private_key));
@@ -1464,6 +1467,9 @@ static esp_err_t wireguard_save_post_handler(httpd_req_t *req)
     if (prefix < 1) prefix = 1;
     if (prefix > 32) prefix = 32;
     g_config.wg_local_prefix = (uint8_t)prefix;
+
+    get_field(body, "wg_allowed_subnets", val, sizeof(val));
+    strlcpy(g_config.wg_allowed_subnets, val, sizeof(g_config.wg_allowed_subnets));
 
     get_field(body, "wg_keepalive_sec", val, sizeof(val));
     int keepalive = atoi(val);

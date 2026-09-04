@@ -525,6 +525,7 @@
                 "ARDUINO_RUNNING_CORE=1",
                 "ARDUINO_EVENT_RUNNING_CORE=1",
                 "BOARD_HAS_PSRAM",
+                "CONFIG_WIREGUARD_MAX_SRC_IPS=8",
                 ""
             ],
             "cStandard": "gnu23",
